@@ -1,0 +1,1 @@
+{"errorMessage": "Unable to import module 'lambda_function': cannot import name '_imaging' from 'PIL' (/var/task/PIL/__init__.py)", "errorType": "Runtime.ImportModuleError"}
