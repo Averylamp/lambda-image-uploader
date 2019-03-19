@@ -8,23 +8,41 @@ import base64
 import random
 from multiprocessing.dummy import Pool as ThreadPool
 from io import BytesIO
+from time import perf_counter
 
 
-def upload_image(bucket, size_str, rand_hash, image, compressionQuality = 85):
+def createResizedImage(image, resize_size):
+    if image.size[0] > image.size[1]:
+        min_size = image.size[1]
+    else:
+        min_size = image.size[0]
+    new_size = (int(resize_size / min_size * image.size[0]), int(resize_size / min_size * image.size[1]))
+    resized_image = image.resize(new_size, Image.ANTIALIAS)
+    return resized_image, new_size
+
+def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
     try:
+        start = perf_counter()
+        ogImage = Image.open("/tmp/{}-original.jpg".format(rand_hash))
+        if size_str == "original":
+            image = ogImage
+            new_size = size
+        else:
+            image, new_size = createResizedImage(ogImage, size)
         buff = BytesIO()
-        image.save(buff, format="JPEG", quality = compressionQuality, optimize=True)
+        image.save(buff, format="JPEG", quality = compressionQuality)
         buff.seek(0)
-        blob = bucket.blob("images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash))
-        url = bucket.put_object(Bucket="pear-images", Body=buff)
-        print(url)
-        return url
+        imageKey = "images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash)
+        s3Client.put_object(Bucket="pear-images",Key=imageKey, Body=buff, ACL="public-read")
+        url = "https://s3.amazonaws.com/pear-images/{}".format(imageKey)
+        print("Processed {}: {}".format(size_str, perf_counter() - start))
+        return (url, new_size)
     except Exception as e:
-        print("Error")
+        print("Error saving image to public cloud")
         print(e)
-        return None
 
 def compressAndUploadImage(base64ImageString, uid = "0"):
+    start = perf_counter()
 
     image = Image.open(BytesIO(base64.b64decode(base64ImageString)))
 
@@ -39,8 +57,9 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
                 image = image.rotate(270, expand=True)
             elif exif[orientation] == 8:
                 image = image.rotate(90, expand=True)
-    except:
+    except Exception as e:
         # There is AttributeError: _getexif sometimes.
+        print("Error getting exif data: {}".format(e))
         pass
     image = image.convert('RGB')
     image_ratio = image.size[1] / image.size[0]
@@ -49,28 +68,12 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
     else:
         min_size = image.size[0]
 
-    max_original_size = 1600
+    max_original_size = 1500
     large_size = 1000
     medium_size = 600
     small_size = 300
     thumb_size = 150
     compressionQuality = 85
-
-    def createResizedImage(image, resize_size):
-        if image.size[0] > image.size[1]:
-            min_size = image.size[1]
-        else:
-            min_size = image.size[0]
-        new_size = (int(resize_size / min_size * image.size[0]), int(resize_size / min_size * image.size[1]))
-        resized_image = image.resize(new_size, Image.ANTIALIAS)
-        return resized_image, new_size
-
-
-    large_image, large_size = createResizedImage(image, large_size)
-    medium_image, medium_size = createResizedImage(image, medium_size)
-    small_image, small_size = createResizedImage(image, small_size)
-    thumb_image, thumb_size = createResizedImage(image, thumb_size)
-
 
     if image.size[0] > max_original_size and image.size[1] > max_original_size:
         image, original_size = createResizedImage(image, max_original_size)
@@ -78,63 +81,53 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
         original_size = (image.size)
 
     random_hash = "%032x" % (random.getrandbits(128))
-    s3Client = boto3.client(u's3')
-    print(s3Client)
-    buff = BytesIO()
-    image.save(buff, format="JPEG", quality = compressionQuality, optimize=True)
-    buff.seek(0)
-    print("Putting object in bucket")
-    imageKey = "images/{}/{}/{}.jpg".format(random_hash, "original", random_hash)
-    # imageKey = "test3.jpg"
-    res = s3Client.put_object(Bucket="pear-images",Key=imageKey, Body=buff, ACL="public-read")
-    print(res)
-    print("Put")
-    print("URL: https://s3.amazonaws.com/pear-images/{}".format(imageKey))
-    # tasks = [   (bucket, "original", random_hash, image, compressionQuality),
-    #             (bucket, "large", random_hash, large_image, compressionQuality),
-    #             (bucket, "medium", random_hash, medium_image, compressionQuality),
-    #             (bucket, "small", random_hash, small_image, compressionQuality),
-    #             (bucket, "thumb", random_hash, thumb_image, compressionQuality)]
-    #
-    # pool = ThreadPool(5)
-    #
-    # results = pool.starmap(upload_image, tasks)
-    # pool.close()
-    # pool.join()
+    image.save("/tmp/{}-original.jpg".format(random_hash), "JPEG", quality = compressionQuality, optimize=True)
+    print("Saved og image: {}".format(perf_counter() - start))
 
-    # size_map = {
-    #     "imageID" : random_hash,
-    #     "original" : {
-    #         "imageType": "original",
-    #         "imageURL" : results[0],
-    #         "width":  original_size[0],
-    #         "height": original_size[1],
-    #     },
-    #     "large" : {
-    #         "imageType": "large",
-    #         "imageURL" : results[1],
-    #         "width": large_size[0],
-    #         "height": large_size[1],
-    #     },
-    #     "medium" : {
-    #         "imageType": "medium",
-    #         "imageURL" : results[2],
-    #         "width": medium_size[0],
-    #         "height": medium_size[1],
-    #     },
-    #     "small" : {
-    #         "imageType": "small",
-    #         "imageURL" : results[3],
-    #         "width": small_size[0],
-    #         "height": small_size[1],
-    #     },
-    #     "thumbnail" : {
-    #         "imageType": "thumbnail",
-    #         "imageURL" : results[4],
-    #         "width": thumb_size[0],
-    #         "height": thumb_size[1],
-    #     },
-    # }
+    s3Client = boto3.client(u's3')
+    tasks = [   (s3Client, "original", random_hash, original_size, compressionQuality),
+                (s3Client, "large", random_hash, large_size, compressionQuality),
+                (s3Client, "medium", random_hash, medium_size, compressionQuality),
+                (s3Client, "small", random_hash, small_size, compressionQuality),
+                (s3Client, "thumb", random_hash, thumb_size, compressionQuality)]
+
+    pool = ThreadPool(5)
+    results = pool.starmap(upload_image, tasks)
+    print("Starmap: {}".format(perf_counter() - start))
+    os.remove("/tmp/{}-original.jpg".format(random_hash))
+    size_map = {
+        "imageID" : random_hash,
+        "original" : {
+            "imageType": "original",
+            "imageURL" : results[0][0],
+            "width":  results[0][1][0],
+            "height": results[0][1][1],
+        },
+        "large" : {
+            "imageType": "large",
+            "imageURL" : results[1][0],
+            "width": results[1][1][0],
+            "height": results[1][1][1],
+        },
+        "medium" : {
+            "imageType": "medium",
+            "imageURL" : results[2][0],
+            "width": results[2][1][0],
+            "height": results[2][1][1],
+        },
+        "small" : {
+            "imageType": "small",
+            "imageURL" : results[3][0],
+            "width": results[3][1][0],
+            "height": results[3][1][1],
+        },
+        "thumbnail" : {
+            "imageType": "thumbnail",
+            "imageURL" : results[4][0],
+            "width": results[4][1][0],
+            "height": results[4][1][1],
+        },
+    }
     return size_map
 
 
@@ -161,5 +154,5 @@ def lambda_handler(event, context):
         size_map = compressAndUploadImage(base64ImageString)
     return {
         'statusCode': 200,
-        'body': json.dumps('Hello from Lambda!')
+        'body': json.dumps(size_map)
     }
