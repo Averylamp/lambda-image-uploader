@@ -1,4 +1,4 @@
-#!/Users/avery/Pear/backend-image-uploader/env/bin/python
+#!/home/avery/Private/lambda-image-uploader/env/bin/python
 
 import sys
 import getopt

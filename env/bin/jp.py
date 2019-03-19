@@ -1,4 +1,4 @@
-#!/Users/avery/Pear/backend-image-uploader/env/bin/python3.7
+#!/home/avery/Private/lambda-image-uploader/env/bin/python3
 
 import sys
 import json

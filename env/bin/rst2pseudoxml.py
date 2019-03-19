@@ -1,4 +1,4 @@
-#!/Users/avery/Pear/backend-image-uploader/env/bin/python3.7
+#!/home/avery/Private/lambda-image-uploader/env/bin/python3
 
 # $Id: rst2pseudoxml.py 4564 2006-05-21 20:44:42Z wiemann $
 # Author: David Goodger <goodger@python.org>

@@ -1,4 +1,4 @@
-#!/Users/avery/Pear/backend-image-uploader/env/bin/python3.7
+#!/home/avery/Private/lambda-image-uploader/env/bin/python3
 
 # $Id: rst2odt.py 5839 2009-01-07 19:09:28Z dkuhlman $
 # Author: Dave Kuhlman <dkuhlman@rexx.com>
