@@ -1,7 +1,7 @@
 #!/bin/bash
 
 rm function.zip
-cd env/lib/python3.7/site-packages/
+cd env/lib/python3.6/site-packages/
 zip -r ~/Pear/backend-image-uploader/function.zip .
 cd ~/Pear/backend-image-uploader/
 zip -g function.zip lambda_function.py

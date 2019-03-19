@@ -1,1 +1,1 @@
-{"errorMessage": "Unable to import module 'lambda_function': cannot import name '_imaging' from 'PIL' (/var/task/PIL/__init__.py)", "errorType": "Runtime.ImportModuleError"}
+{"errorMessage": "Extra data: line 1 column 4 (char 3)", "errorType": "JSONDecodeError", "stackTrace": [["/var/lang/lib/python3.6/json/__init__.py", 354, "loads", "return _default_decoder.decode(s)"], ["/var/lang/lib/python3.6/json/decoder.py", 342, "decode", "raise JSONDecodeError(\"Extra data\", s, end)"]]}
