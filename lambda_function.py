@@ -22,7 +22,6 @@ def createResizedImage(image, resize_size):
 
 def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
     try:
-        start = perf_counter()
         ogImage = Image.open("/tmp/{}-original.jpg".format(rand_hash))
         if size_str == "original":
             image = ogImage
@@ -35,7 +34,6 @@ def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
         imageKey = "images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash)
         s3Client.put_object(Bucket="pear-images",Key=imageKey, Body=buff, ACL="public-read")
         url = "https://s3.amazonaws.com/pear-images/{}".format(imageKey)
-        print("Processed {}: {}".format(size_str, perf_counter() - start))
         return (url, new_size)
     except Exception as e:
         print("Error saving image to public cloud")
@@ -80,9 +78,8 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
     else:
         original_size = (image.size)
 
-    random_hash = "%032x" % (random.getrandbits(128))
+    random_hash = str(uuid.uuid4())
     image.save("/tmp/{}-original.jpg".format(random_hash), "JPEG", quality = compressionQuality, optimize=True)
-    print("Saved og image: {}".format(perf_counter() - start))
 
     s3Client = boto3.client(u's3')
     tasks = [   (s3Client, "original", random_hash, original_size, compressionQuality),
@@ -93,7 +90,6 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
 
     pool = ThreadPool(5)
     results = pool.starmap(upload_image, tasks)
-    print("Starmap: {}".format(perf_counter() - start))
     os.remove("/tmp/{}-original.jpg".format(random_hash))
     size_map = {
         "imageID" : random_hash,
@@ -132,27 +128,18 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
 
 
 def lambda_handler(event, context):
-    print("HELLO")
-    # TODO implement
-    print(uuid.uuid1())
-    # print("Received event: " + json.dumps(event, indent=2))
-    print("Log stream name:", context.log_stream_name)
-    print("Log group name:",  context.log_group_name)
-    print("Request ID:", context.aws_request_id)
-    print("Mem. limits(MB):", context.memory_limit_in_mb)
-    # Code will execute quickly, so we add a 1 second intentional delay so you can see that in time remaining value.
-    print("Time remaining (MS):", context.get_remaining_time_in_millis())
 
     if event["httpMethod"] == "POST":
-        print("POST Request received")
         decodedString = base64.b64decode(event["body"]).decode("utf-8").replace("'", '"')
         payload = json.loads(decodedString)
         base64ImageString = payload["image"]
-        print("Image base64 len: {}".format(len(base64ImageString)))
-
 
         size_map = compressAndUploadImage(base64ImageString)
+        return {
+            'statusCode': 200,
+            'body': json.dumps(size_map)
+        }
     return {
-        'statusCode': 200,
-        'body': json.dumps(size_map)
+        'statusCode': 500,
+        'body': "Invalid Request"
     }
