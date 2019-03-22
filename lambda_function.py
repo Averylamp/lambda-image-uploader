@@ -82,9 +82,7 @@ def compressAndUploadImage(base64ImageString, dev=False, uid = "0"):
     else:
         original_size = (image.size)
 
-    random_hash = str(uuid.uuid4())
-    if dev:
-        random_hash = str(hashlib.md5(base64ImageString.encode('utf-8')).hexdigest())
+    random_hash = str(hashlib.md5(base64ImageString.encode('utf-8')).hexdigest())
     image.save("/tmp/{}-original.jpg".format(random_hash), "JPEG", quality = compressionQuality, optimize=True)
 
     s3Client = boto3.client(u's3')
