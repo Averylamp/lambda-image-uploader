@@ -9,7 +9,7 @@ import random
 from multiprocessing.dummy import Pool as ThreadPool
 from io import BytesIO
 from time import perf_counter
-
+import hashlib
 
 def createResizedImage(image, resize_size):
     if image.size[0] > image.size[1]:
@@ -20,7 +20,7 @@ def createResizedImage(image, resize_size):
     resized_image = image.resize(new_size, Image.ANTIALIAS)
     return resized_image, new_size
 
-def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
+def upload_image(s3Client, size_str, rand_hash, size, dev=False, compressionQuality = 85):
     try:
         ogImage = Image.open("/tmp/{}-original.jpg".format(rand_hash))
         if size_str == "original":
@@ -31,7 +31,11 @@ def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
         buff = BytesIO()
         image.save(buff, format="JPEG", quality = compressionQuality)
         buff.seek(0)
-        imageKey = "images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash)
+        if not dev:
+            imageKey = "images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash)
+        else:
+            imageKey = "dev-images/{}/{}/{}.jpg".format(rand_hash, size_str, rand_hash)
+
         s3Client.put_object(Bucket="pear-images",Key=imageKey, Body=buff, ACL="public-read")
         url = "https://s3.amazonaws.com/pear-images/{}".format(imageKey)
         return (url, new_size)
@@ -39,7 +43,7 @@ def upload_image(s3Client, size_str, rand_hash, size, compressionQuality = 85):
         print("Error saving image to public cloud")
         print(e)
 
-def compressAndUploadImage(base64ImageString, uid = "0"):
+def compressAndUploadImage(base64ImageString, dev=False, uid = "0"):
     start = perf_counter()
 
     image = Image.open(BytesIO(base64.b64decode(base64ImageString)))
@@ -79,14 +83,16 @@ def compressAndUploadImage(base64ImageString, uid = "0"):
         original_size = (image.size)
 
     random_hash = str(uuid.uuid4())
+    if dev:
+        random_hash = str(hashlib.md5(base64ImageString.encode('utf-8')).hexdigest())
     image.save("/tmp/{}-original.jpg".format(random_hash), "JPEG", quality = compressionQuality, optimize=True)
 
     s3Client = boto3.client(u's3')
-    tasks = [   (s3Client, "original", random_hash, original_size, compressionQuality),
-                (s3Client, "large", random_hash, large_size, compressionQuality),
-                (s3Client, "medium", random_hash, medium_size, compressionQuality),
-                (s3Client, "small", random_hash, small_size, compressionQuality),
-                (s3Client, "thumb", random_hash, thumb_size, compressionQuality)]
+    tasks = [   (s3Client, "original", random_hash, original_size, dev, compressionQuality),
+                (s3Client, "large", random_hash, large_size, dev, compressionQuality),
+                (s3Client, "medium", random_hash, medium_size, dev, compressionQuality),
+                (s3Client, "small", random_hash, small_size, dev, compressionQuality),
+                (s3Client, "thumb", random_hash, thumb_size, dev, compressionQuality)]
 
     pool = ThreadPool(5)
     results = pool.starmap(upload_image, tasks)
@@ -133,8 +139,10 @@ def lambda_handler(event, context):
         decodedString = base64.b64decode(event["body"]).decode("utf-8").replace("'", '"')
         payload = json.loads(decodedString)
         base64ImageString = payload["image"]
-
-        size_map = compressAndUploadImage(base64ImageString)
+        dev = False
+        if "dev" in payload:
+            dev = True
+        size_map = compressAndUploadImage(base64ImageString, dev=dev)
         return {
             'statusCode': 200,
             'body': json.dumps(size_map)
